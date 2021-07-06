@@ -58,6 +58,8 @@
 #include "pcl/io/io.h"
 #include "pcl_ros/transforms.hpp"
 
+#include "specialized_intra_process/specialized_intra_process.hpp"
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 pointcloud_preprocessor::Filter::Filter(
   const std::string & filter_name, const rclcpp::NodeOptions & options)
@@ -86,39 +88,31 @@ pointcloud_preprocessor::Filter::Filter(
 
   // Set publisher
   {
-    pub_output_ = this->create_publisher<PointCloud2>(
-      "output", rclcpp::SensorDataQoS().keep_last(max_queue_size_));
+    pub_output_ = feature::create_intra_process_publisher<PointCloudSharedPtr>(
+      this, "output", rclcpp::SensorDataQoS().keep_last(max_queue_size_));
+
+    pub_output_->set_conversion_to_ros_message(this,
+      [](const PointCloudSharedPtr &source,
+       sensor_msgs::msg::PointCloud2 &destination){
+    pcl::toROSMsg(*source, destination);
+    });
   }
 
   // Set subscriber
   {
     if (use_indices_) {
-      // Subscribe to the input using a filter
-      sub_input_filter_.subscribe(
-        this, "input", rclcpp::SensorDataQoS().keep_last(max_queue_size_).get_rmw_qos_profile());
-      sub_indices_filter_.subscribe(
-        this, "indices", rclcpp::SensorDataQoS().keep_last(max_queue_size_).get_rmw_qos_profile());
-
-      if (approximate_sync_) {
-        sync_input_indices_a_ = std::make_shared<ApproximateTimeSyncPolicy>(max_queue_size_);
-        sync_input_indices_a_->connectInput(sub_input_filter_, sub_indices_filter_);
-        sync_input_indices_a_->registerCallback(
-          std::bind(
-            &Filter::input_indices_callback, this, std::placeholders::_1, std::placeholders::_2));
-      } else {
-        sync_input_indices_e_ = std::make_shared<ExactTimeSyncPolicy>(max_queue_size_);
-        sync_input_indices_e_->connectInput(sub_input_filter_, sub_indices_filter_);
-        sync_input_indices_e_->registerCallback(
-          std::bind(
-            &Filter::input_indices_callback, this, std::placeholders::_1, std::placeholders::_2));
-      }
+      // specialized_intra_process の場合のポインタ渡しの場合、MessageFilter は扱えない。
+      // indicedsとPointCloudの対応が取れたデータを送受信する場合は、
+      // indicesとPointCloudを含む構造体を送受信させる方法がある。
+      // Message filter は message.header.stamp.sec と message.header.stamp.nsec を使う。
+      // pclのheaderは mesage.headerはあるが、std_msgs::Headerとは異なるのでやはり使えない。
     } else {
       // Subscribe in an old fashion to input only (no filters)
       // CAN'T use auto-type here.
-      std::function<void(const PointCloud2ConstPtr msg)> cb = std::bind(
+      std::function<void(PointCloudMessageT msg)> cb = std::bind(
         &Filter::input_indices_callback, this, std::placeholders::_1, PointIndicesConstPtr());
-      sub_input_ = create_subscription<PointCloud2>(
-        "input", rclcpp::SensorDataQoS().keep_last(max_queue_size_), cb);
+      sub_input_ = feature::create_intra_process_subscription<PointCloudSharedPtr>(
+        this, "input", rclcpp::SensorDataQoS().keep_last(max_queue_size_), cb);
     }
   }
 
@@ -142,27 +136,27 @@ void pointcloud_preprocessor::Filter::setupTF()
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void pointcloud_preprocessor::Filter::computePublish(
-  const PointCloud2ConstPtr & input, const IndicesPtr & indices)
+  PointCloudSharedPtr input, const IndicesPtr & indices)
 {
-  PointCloud2 output;
+  PointCloud output;
   // Call the virtual method in the child
   filter(input, indices, output);
 
-  auto cloud_tf = std::make_unique<PointCloud2>(output);  // set the output by default
+  auto cloud_tf = boost::make_shared<PointCloud>(output);  // set the output by default
   // Check whether the user has given a different output TF frame
   if (!tf_output_frame_.empty() && output.header.frame_id != tf_output_frame_) {
     RCLCPP_DEBUG(
       this->get_logger(), "[computePublish] Transforming output dataset from %s to %s.",
       output.header.frame_id.c_str(), tf_output_frame_.c_str());
     // Convert the cloud into the different frame
-    PointCloud2 cloud_transformed;
+    PointCloud cloud_transformed;
     if (!pcl_ros::transformPointCloud(tf_output_frame_, output, cloud_transformed, *tf_buffer_)) {
       RCLCPP_ERROR(
         this->get_logger(), "[computePublish] Error converting output dataset from %s to %s.",
         output.header.frame_id.c_str(), tf_output_frame_.c_str());
       return;
     }
-    cloud_tf.reset(new PointCloud2(cloud_transformed));
+    cloud_tf.reset(new PointCloud(cloud_transformed));
   }
   if (tf_output_frame_.empty() && output.header.frame_id != tf_input_orig_frame_) {
     // no tf_output_frame given, transform the dataset to its original frame
@@ -170,7 +164,7 @@ void pointcloud_preprocessor::Filter::computePublish(
       this->get_logger(), "[computePublish] Transforming output dataset from %s back to %s.",
       output.header.frame_id.c_str(), tf_input_orig_frame_.c_str());
     // Convert the cloud into the different frame
-    PointCloud2 cloud_transformed;
+    PointCloud cloud_transformed;
     if (!pcl_ros::transformPointCloud(
         tf_input_orig_frame_, output, cloud_transformed, *tf_buffer_))
     {
@@ -179,14 +173,15 @@ void pointcloud_preprocessor::Filter::computePublish(
         output.header.frame_id.c_str(), tf_input_orig_frame_.c_str());
       return;
     }
-    cloud_tf.reset(new PointCloud2(cloud_transformed));
+    cloud_tf.reset(new PointCloud(cloud_transformed));
   }
 
   // Copy timestamp to keep it
   cloud_tf->header.stamp = input->header.stamp;
 
   // Publish a boost shared ptr
-  pub_output_->publish(std::move(cloud_tf));
+  auto cloud_tf_msg = std::make_unique<PointCloudSharedPtr>(cloud_tf);
+  pub_output_->publish(std::move(cloud_tf_msg));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,8 +206,9 @@ rcl_interfaces::msg::SetParametersResult pointcloud_preprocessor::Filter::filter
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 void pointcloud_preprocessor::Filter::input_indices_callback(
-  const PointCloud2ConstPtr cloud, const PointIndicesConstPtr indices)
+  PointCloudMessageT cloud_msg, const PointIndicesConstPtr indices)
 {
+  PointCloudSharedPtr cloud = *cloud_msg;
   // If cloud is given, check if it's valid
   if (!isValid(cloud)) {
     RCLCPP_ERROR(this->get_logger(), "[input_indices_callback] Invalid input!");
@@ -246,14 +242,14 @@ void pointcloud_preprocessor::Filter::input_indices_callback(
 
   // Check whether the user has given a different input TF frame
   tf_input_orig_frame_ = cloud->header.frame_id;
-  PointCloud2ConstPtr cloud_tf;
+  PointCloudSharedPtr cloud_tf;
   if (!tf_input_frame_.empty() && cloud->header.frame_id != tf_input_frame_) {
     RCLCPP_DEBUG(
       this->get_logger(), "[input_indices_callback] Transforming input dataset from %s to %s.",
       cloud->header.frame_id.c_str(), tf_input_frame_.c_str());
     // Save the original frame ID
     // Convert the cloud into the different frame
-    PointCloud2 cloud_transformed;
+    PointCloud cloud_transformed;
 
     if (!tf_buffer_->canTransform(
         tf_input_frame_, cloud->header.frame_id, this->now(),
@@ -273,7 +269,7 @@ void pointcloud_preprocessor::Filter::input_indices_callback(
         cloud->header.frame_id.c_str(), tf_input_frame_.c_str());
       return;
     }
-    cloud_tf = std::make_shared<PointCloud2>(cloud_transformed);
+    cloud_tf = boost::make_shared<PointCloud>(cloud_transformed);
   } else {
     cloud_tf = cloud;
   }

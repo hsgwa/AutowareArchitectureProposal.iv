@@ -50,6 +50,7 @@
  */
 
 #include <vector>
+#include <boost/shared_ptr.hpp>
 
 #include "pointcloud_preprocessor/crop_box_filter/crop_box_filter_nodelet.hpp"
 
@@ -90,17 +91,15 @@ CropBoxFilterComponent::CropBoxFilterComponent(const rclcpp::NodeOptions & optio
   }
 }
 
+
 void CropBoxFilterComponent::filter(
-  const PointCloud2ConstPtr & input, const IndicesPtr & indices, PointCloud2 & output)
+  PointCloudSharedPtr & input, const IndicesPtr & indices, PointCloud & output)
 {
   boost::mutex::scoped_lock lock(mutex_);
-  pcl::PCLPointCloud2::Ptr pcl_input(new pcl::PCLPointCloud2);
-  pcl_conversions::toPCL(*(input), *(pcl_input));
-  impl_.setInputCloud(pcl_input);
+
+  impl_.setInputCloud(input);
   impl_.setIndices(indices);
-  pcl::PCLPointCloud2 pcl_output;
-  impl_.filter(pcl_output);
-  pcl_conversions::moveFromPCL(pcl_output, output);
+  impl_.filter(output);
 
   publishCropBoxPolygon();
 }

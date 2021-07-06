@@ -33,6 +33,7 @@
   <depend>autoware_utils</depend>
   <depend>tier4_pcl_extensions</depend>
   <depend>lanelet2_extension</depend>
+  <depend>specialized_intra_process</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

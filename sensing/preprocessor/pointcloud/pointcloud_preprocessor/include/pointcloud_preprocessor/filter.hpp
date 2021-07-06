@@ -78,6 +78,8 @@
 #include "tf2_ros/create_timer_ros.h"
 #include "tf2_ros/transform_listener.h"
 
+#include "specialized_intra_process/specialized_intra_process.hpp"
+
 namespace pointcloud_preprocessor
 {
 namespace sync_policies = message_filters::sync_policies;
@@ -104,12 +106,10 @@ bool get_param(const std::vector<rclcpp::Parameter> & p, const std::string & nam
 class Filter : public rclcpp::Node
 {
 public:
-  using PointCloud2 = sensor_msgs::msg::PointCloud2;
-  using PointCloud2ConstPtr = sensor_msgs::msg::PointCloud2::ConstSharedPtr;
-
   using PointCloud = pcl::PointCloud<pcl::PointXYZ>;
-  using PointCloudPtr = PointCloud::Ptr;
-  using PointCloudConstPtr = PointCloud::ConstPtr;
+  using PointCloudSharedPtr = boost::shared_ptr<PointCloud>;
+  using PointCloudSharedPtrUniquePtr = std::unique_ptr<PointCloudSharedPtr>;
+  using PointCloudMessageT = std::unique_ptr<PointCloudSharedPtr>;
 
   using PointIndices = pcl_msgs::msg::PointIndices;
   using PointIndicesPtr = PointIndices::SharedPtr;
@@ -122,10 +122,8 @@ public:
   using IndicesPtr = pcl::IndicesPtr;
   using IndicesConstPtr = pcl::IndicesConstPtr;
 
-  using ExactTimeSyncPolicy =
-    message_filters::Synchronizer<sync_policies::ExactTime<PointCloud2, PointIndices>>;
-  using ApproximateTimeSyncPolicy =
-    message_filters::Synchronizer<sync_policies::ApproximateTime<PointCloud2, PointIndices>>;
+  // message_filters は headerを含むメッセージのみに使用できる。
+  // 今回は boost::shared_ptr<PointCloud> を送受信するので、使用できない。
 
   explicit Filter(
     const std::string & filter_name = "pointcloud_preprocessor_filter",
@@ -133,13 +131,12 @@ public:
 
 protected:
   /** \brief The input PointCloud2 subscriber. */
-  rclcpp::Subscription<PointCloud2>::SharedPtr sub_input_;
+  feature::Subscription<PointCloudSharedPtr>::SharedPtr sub_input_;
 
   /** \brief The output PointCloud2 publisher. */
-  rclcpp::Publisher<PointCloud2>::SharedPtr pub_output_;
+  feature::Publisher<PointCloudSharedPtr>::SharedPtr pub_output_;
 
   /** \brief The message filter subscriber for PointCloud2. */
-  message_filters::Subscriber<PointCloud2> sub_input_filter_;
 
   /** \brief The message filter subscriber for PointIndices. */
   message_filters::Subscriber<PointIndices> sub_indices_filter_;
@@ -177,13 +174,13 @@ protected:
    * \param output the resultant filtered PointCloud2
    */
   virtual void filter(
-    const PointCloud2ConstPtr & input, const IndicesPtr & indices, PointCloud2 & output) = 0;
+    PointCloudSharedPtr & input, const IndicesPtr & indices, PointCloud & output) = 0;
 
   /** \brief Call the child filter () method, optionally transform the result, and publish it.
    * \param input the input point cloud dataset.
    * \param indices a pointer to the vector of point indices to use.
    */
-  void computePublish(const PointCloud2ConstPtr & input, const IndicesPtr & indices);
+  void computePublish(PointCloudSharedPtr input, const IndicesPtr & indices);
 
   //////////////////////
   // from PCLNodelet //
@@ -219,15 +216,15 @@ protected:
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   inline bool isValid(
-    const PointCloud2ConstPtr & cloud,
+    const PointCloudSharedPtr & cloud,
     const std::string & /*topic_name*/ = "input")
   {
-    if (cloud->width * cloud->height * cloud->point_step != cloud->data.size()) {
+    if (cloud->width * cloud->height != cloud->points.size()) {
       RCLCPP_WARN(
         this->get_logger(),
-        "Invalid PointCloud (data = %zu, width = %d, height = %d, step = %d) with stamp %f, "
+        "Invalid PointCloud (data = %zu, width = %d, height = %d) with stamp %f, "
         "and frame %sreceived!",
-        cloud->data.size(), cloud->width, cloud->height, cloud->point_step,
+        cloud->points.size(), cloud->width, cloud->height,
         rclcpp::Time(cloud->header.stamp).seconds(), cloud->header.frame_id.c_str());
       return false;
     }
@@ -254,12 +251,9 @@ private:
   rcl_interfaces::msg::SetParametersResult filterParamCallback(
     const std::vector<rclcpp::Parameter> & p);
 
-  /** \brief Synchronized input, and indices.*/
-  std::shared_ptr<ExactTimeSyncPolicy> sync_input_indices_e_;
-  std::shared_ptr<ApproximateTimeSyncPolicy> sync_input_indices_a_;
 
   /** \brief PointCloud2 + Indices data callback. */
-  void input_indices_callback(const PointCloud2ConstPtr cloud, const PointIndicesConstPtr indices);
+  void input_indices_callback(PointCloudMessageT cloud_msg, const PointIndicesConstPtr indices);
 
   void setupTF();
 

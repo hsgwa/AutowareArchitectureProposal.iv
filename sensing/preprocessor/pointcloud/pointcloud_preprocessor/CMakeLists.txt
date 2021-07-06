@@ -17,6 +17,7 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(specialized_intra_process REQUIRED)
 find_package(OpenMP)
 ament_auto_find_build_dependencies()
 

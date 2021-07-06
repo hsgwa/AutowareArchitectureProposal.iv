@@ -67,13 +67,13 @@ class CropBoxFilterComponent : public pointcloud_preprocessor::Filter
 {
 protected:
   virtual void filter(
-    const PointCloud2ConstPtr & input, const IndicesPtr & indices, PointCloud2 & output);
+    PointCloudSharedPtr & input, const IndicesPtr & indices, PointCloud & output);
 
   void publishCropBoxPolygon();
 
 private:
   /** \brief The PCL filter implementation used. */
-  pcl::CropBox<pcl::PCLPointCloud2> impl_;
+  pcl::CropBox<pcl::PointXYZ> impl_;
   rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr crop_box_polygon_pub_;
 
   /** \brief Parameter service callback result : needed to be hold */
