@@ -35,25 +35,8 @@ include_directories(
 
 ament_auto_add_library(pointcloud_preprocessor_filter SHARED
   src/filter.cpp
-  src/compare_map_filter/distance_based_compare_map_filter_nodelet.cpp
-  src/compare_map_filter/voxel_based_approximate_compare_map_filter_nodelet.cpp
-  src/compare_map_filter/voxel_based_compare_map_filter_nodelet.cpp
-  src/compare_map_filter/voxel_distance_based_compare_map_filter_nodelet.cpp
   src/concatenate_data/concatenate_data_nodelet.cpp
   src/crop_box_filter/crop_box_filter_nodelet.cpp
-  src/downsample_filter/voxel_grid_downsample_filter_nodelet.cpp
-  src/downsample_filter/random_downsample_filter_nodelet.cpp
-  src/downsample_filter/approximate_downsample_filter_nodelet.cpp
-  src/ground_filter/ray_ground_filter_nodelet.cpp
-  src/ground_filter/ransac_ground_filter_nodelet.cpp
-  src/outlier_filter/ring_outlier_filter_nodelet.cpp
-  src/outlier_filter/voxel_grid_outlier_filter_nodelet.cpp
-  src/outlier_filter/radius_search_2d_outlier_filter_nodelet.cpp
-  src/passthrough_filter/passthrough_filter_nodelet.cpp
-  src/passthrough_filter/passthrough_filter_uint16_nodelet.cpp
-  src/passthrough_filter/passthrough_uint16.cpp
-  src/pointcloud_accumulator/pointcloud_accumulator_nodelet.cpp
-  src/vector_map_filter/lanelet2_map_filter_nodelet.cpp
 )
 
 target_link_libraries(pointcloud_preprocessor_filter
@@ -71,30 +54,15 @@ endif()
 
 # ========== Compare Map Filter ==========
 # -- Distance Based Compare Map Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::DistanceBasedCompareMapFilterComponent"
-  EXECUTABLE distance_based_compare_map_filter_node)
 
 # -- Voxel Based Approximate Compare Map Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::VoxelBasedApproximateCompareMapFilterComponent"
-  EXECUTABLE voxel_based_approximate_compare_map_filter_node)
 
 # -- Voxel Based Compare Map Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::VoxelBasedCompareMapFilterComponent"
-  EXECUTABLE voxel_based_compare_map_filter_node)
 
 # -- Voxel Distance Based Compare Map Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::VoxelDistanceBasedCompareMapFilterComponent"
-  EXECUTABLE voxel_distance_based_compare_map_filter_node)
 
 
 # ========== Concatenate data ==========
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::PointCloudConcatenateDataSynchronizerComponent"
-  EXECUTABLE concatenate_data_node)
 
 
 # ========== CropBox ==========
@@ -105,64 +73,31 @@ rclcpp_components_register_node(pointcloud_preprocessor_filter
 
 # ========== Down Sampler Filter ==========
 # -- Voxel Grid Downsample Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::VoxelGridDownsampleFilterComponent"
-  EXECUTABLE voxel_grid_downsample_filter_node)
 
 # -- Random Downsample Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::RandomDownsampleFilterComponent"
-  EXECUTABLE random_downsample_filter_node)
 
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::ApproximateDownsampleFilterComponent"
-  EXECUTABLE approximate_downsample_filter_node)
 
 # ========== Ground Filter ==========
 # -- Ray Ground Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::RayGroundFilterComponent"
-  EXECUTABLE ray_ground_filter_node)
 
 # -- RANSAC Ground Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::RANSACGroundFilterComponent"
-  EXECUTABLE ransac_ground_filter_node)
 
 
 # ========== Outlier Filter ==========
 # -- Ring Outlier Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::RingOutlierFilterComponent"
-  EXECUTABLE ring_outlier_filter_node)
 
 # -- Voxel Grid Outlier Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::VoxelGridOutlierFilterComponent"
-  EXECUTABLE voxel_grid_outlier_filter_node)
 
 # -- Radius Search 2D Outlier Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::RadiusSearch2DOutlierFilterComponent"
-  EXECUTABLE radius_search_2d_outlier_filter_node)
 
 
 # ========== Passthrough Filter ==========
 # -- Passthrough Filter --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::PassThroughFilterComponent"
-  EXECUTABLE passthrough_filter_node)
 
 # -- Passthrough Filter Uint16 --
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::PassThroughFilterUInt16Component"
-  EXECUTABLE passthrough_filter_uint16_node)
 
 
 # ========== Pointcloud Accumulator Filter ==========
-rclcpp_components_register_node(pointcloud_preprocessor_filter
-  PLUGIN "pointcloud_preprocessor::PointcloudAccumulatorComponent"
-  EXECUTABLE pointcloud_accumulator_node)
 
 
 # ========== Vector Map Filter ==========
